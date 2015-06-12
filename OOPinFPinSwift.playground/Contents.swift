@@ -3,7 +3,7 @@ import Cocoa
 typealias Selector = String
 
 enum IMP {
-  case method((Selector->IMP, Selector, Selector->IMP...)->((Selector->IMP)?))
+  case method((Selector->IMP, Selector, Selector->IMP...)->(Selector->IMP)?)
   case asInteger((Selector->IMP, Selector, Selector->IMP...)->Int?)
   case methodMissing((Selector->IMP, Selector, Selector->IMP...)->(Selector->IMP)?)
   case description((Selector->IMP, Selector, Selector->IMP...)->String?)
@@ -12,15 +12,12 @@ enum IMP {
 typealias Object = Selector -> IMP
 
 func DoesNothing()->Object {
-  var _self : Object! = nil
-  func myself (selector: Selector)->IMP {
+  return { _ in
     return IMP.methodMissing({(this, _cmd, args : Object...) in
       assertionFailure("method missing: \(_cmd)")
       return nil
     })
   }
-  _self = myself
-  return _self
 }
 
 let o : Object = DoesNothing()
@@ -46,7 +43,7 @@ infix operator → {}
 
 func → (receiver: Object?, _cmd:Selector) -> Object? {
   if let imp = receiver.._cmd {
-    switch (imp) {
+    switch imp {
     case .method(let f):
       return f(receiver!, _cmd)
     default:
@@ -57,24 +54,22 @@ func → (receiver: Object?, _cmd:Selector) -> Object? {
   }
 }
 
-func mutate(object: Object, key: Selector, newValue: Object) -> Object {
-  var this : Object! = nil
-  this = { _cmd in
-    switch (_cmd) {
-    case key:
-      return .method({ _ in return newValue })
-    default:
-      return object(_cmd)
-    }
-  }
-  return this
-}
-
 infix operator ☞ {}
 
-func ☞(tuple:(receiver: Object?, command: Selector), value:Object) -> Object? {
-  if let receiver = tuple.receiver {
-    return mutate(receiver, tuple.command, value)
+func mutate(receiver: Object, selector: Selector, value:Object) -> Object {
+  return { _cmd in
+    switch _cmd {
+    case selector:
+      return .method({ _ in return value })
+    default:
+      return receiver(_cmd)
+    }
+  }
+}
+
+func ☞(message:(receiver: Object?, selector: Selector), value:Object) -> Object? {
+  if let receiver = message.receiver {
+    return mutate(receiver, message.selector, value)
   } else {
     return nil
   }
@@ -82,7 +77,7 @@ func ☞(tuple:(receiver: Object?, command: Selector), value:Object) -> Object? 
 
 func ℹ︎(receiver:Object?)->Int? {
   if let imp = receiver.."asInteger" {
-    switch(imp) {
+    switch imp {
     case .asInteger(let f):
       return f(receiver!, "asInteger")
     default:
@@ -96,8 +91,8 @@ func ℹ︎(receiver:Object?)->Int? {
 func Integer(x: Int, proto: Object) -> Object {
   var _self : Object! = nil
   let _x = x
-  func myself(selector:Selector) -> IMP {
-    switch(selector) {
+  _self = { selector in
+    switch selector {
     case "asInteger":
       return IMP.asInteger({ _ in return _x })
     case "description":
@@ -106,15 +101,14 @@ func Integer(x: Int, proto: Object) -> Object {
       return proto(selector)
     }
   }
-  _self = myself
   return _self
 }
 
 func Point(x: Int, y: Int, proto: Object)->((_cmd:Selector)->IMP) {
+  let _x = Integer(x,o), _y = Integer(y,o)
   var _self : Object! = nil
-  var _x = Integer(x,o), _y = Integer(y,o)
-  func myself (selector:Selector) -> IMP {
-    switch (selector) {
+  _self = { selector in
+    switch selector {
     case "x":
       return IMP.method({ _ in
         return _x
@@ -125,7 +119,7 @@ func Point(x: Int, y: Int, proto: Object)->((_cmd:Selector)->IMP) {
       })
     case "setY:":
       return IMP.method({ (this, aSelector, args : Object...) in
-        return mutate(_self, "y", args[0])
+        return (this, "y")☞args[0]
       })
     case "description":
       return IMP.description({ (this, aSelector, args : Object...) in
@@ -137,13 +131,12 @@ func Point(x: Int, y: Int, proto: Object)->((_cmd:Selector)->IMP) {
       return proto(selector)
     }
   }
-  _self = myself
   return _self
 }
 
 func 📓(receiver:Object?) -> String? {
   if let imp = receiver.."description" {
-    switch(imp) {
+    switch imp {
     case .description(let f):
       return f(receiver!, "description")
     default:
@@ -156,7 +149,23 @@ func 📓(receiver:Object?) -> String? {
 
 let p = Point(3, 4, o)
 📓(p)
-ℹ︎(p→"x")
-let pp = (p,"x")☞(Integer(1,o))
-ℹ︎(pp→"x")
-📓(pp)
+let p2 = (p,"x")☞(Integer(1,o))
+📓(p2)
+
+infix operator ✍ {}
+
+func ✍(message:(receiver:Object?, selector:Selector), value:Object) -> Object? {
+  if let imp = message.receiver..message.selector {
+    switch imp {
+    case .method(let f):
+      return f(message.receiver!, message.selector, value)
+    default:
+      return nil
+    }
+  } else {
+    return nil
+  }
+}
+
+let p3 = (p2, "setY:")✍(Integer(42, o))
+📓(p3)
