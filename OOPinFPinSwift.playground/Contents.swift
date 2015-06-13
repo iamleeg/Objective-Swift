@@ -69,7 +69,7 @@ func mutate(receiver: Object, selector: Selector, value:Object) -> Object {
 
 func ☞(message:(receiver: Object?, selector: Selector), value:Object) -> Object? {
   if let receiver = message.receiver {
-    return mutate(receiver, message.selector, value)
+    return mutate(receiver, selector: message.selector, value: value)
   } else {
     return nil
   }
@@ -105,7 +105,7 @@ func Integer(x: Int, proto: Object) -> Object {
 }
 
 func Point(x: Int, y: Int, proto: Object)->((_cmd:Selector)->IMP) {
-  let _x = Integer(x,o), _y = Integer(y,o)
+  let _x = Integer(x,proto: o), _y = Integer(y,proto: o)
   var _self : Object! = nil
   _self = { selector in
     switch selector {
@@ -147,9 +147,9 @@ func 📓(receiver:Object?) -> String? {
   }
 }
 
-let p = Point(3, 4, o)
+let p = Point(3, y: 4, proto: o)
 📓(p)
-let p2 = (p,"x")☞(Integer(1,o))
+let p2 = (p,"x")☞(Integer(1,proto: o))
 📓(p2)
 
 infix operator ✍ {}
@@ -167,5 +167,5 @@ func ✍(message:(receiver:Object?, selector:Selector), value:Object) -> Object?
   }
 }
 
-let p3 = (p2, "setY:")✍(Integer(42, o))
+let p3 = (p2, "setY:")✍(Integer(42, proto: o))
 📓(p3)
