@@ -170,20 +170,23 @@ func ✍(message:(receiver:Object?, selector:Selector), value:Object) -> Object?
 let p3 = (p2, "setY:")✍(Integer(42, proto: o))
 📓(p3)
 
-typealias Class = Dictionary<String, IMP>
+typealias Class = Object
 
-let NSObject : Class = [ "description": IMP.description({ _ in return "An NSObject" })]
+let NSObject : Class = { aSelector in
+  switch aSelector {
+  case "description":
+    return IMP.description({ _ in return "An NSObject" })
+  default:
+    return IMP.methodMissing({ _ in
+      print("Instance does not recognize selector \(aSelector)")
+      return nil
+    })
+  }
+}
 
 func newObject(isa : Class) -> Object {
   return { aSelector in
-    if let anImplementation = isa[aSelector] {
-      return anImplementation
-    } else {
-      return IMP.methodMissing({ _ in
-        print("Does not recognize selector \(aSelector)")
-        return nil
-     })
-    }
+    return isa(aSelector)
   }
 }
 
