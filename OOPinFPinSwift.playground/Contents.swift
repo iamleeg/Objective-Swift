@@ -172,10 +172,14 @@ let p3 = (p2, "setY:")✍(Integer(42, proto: o))
 
 typealias Class = Object
 
+// define a "Non-Standalone" Object that relies on a class for its methods.
+
 let NSObject : Class = { aSelector in
   switch aSelector {
   case "description":
     return IMP.description({ _ in return "An NSObject" })
+  case "instanceVariables":
+    return IMP.method({ _ in return o })
   default:
     return IMP.methodMissing({ _ in
       print("Instance does not recognize selector \(aSelector)")
@@ -185,10 +189,52 @@ let NSObject : Class = { aSelector in
 }
 
 func newObject(isa : Class) -> Object {
+  let ivars = (isa→"instanceVariables")!
   return { aSelector in
-    return isa(aSelector)
+    let ivarIMP = ivars(aSelector)
+    switch ivarIMP {
+    case .method(_):
+      return ivarIMP
+    default:
+      return isa(aSelector)
+    }
   }
 }
 
 let anObject = newObject(NSObject)
 📓(anObject)
+
+func NSPoint(x:Int, y:Int) -> Class {
+  let superclass = NSObject
+  let ivars:Object = { variableName in
+    switch variableName {
+    case "x":
+      return .method({_ in return Integer(x, proto: o)})
+    case "y":
+      return .method({_ in return Integer(y, proto: o)})
+    default:
+      return (superclass→"instanceVariables")!(variableName)
+    }
+  }
+  let thisClass:Class = { aSelector in
+    switch aSelector {
+    case "instanceVariables":
+      return .method({_ in return ivars})
+    case "distanceFromOrigin":
+      return .method({(this, _cmd, args:Object...) in
+        let thisX = ℹ︎(this→"x")!
+        let thisY = ℹ︎(this→"y")!
+        let distance = sqrt(Double(thisX*thisX + thisY*thisY))
+        return Integer(Int(distance), proto: o)
+      })
+    default:
+      return superclass(aSelector)
+    }
+  }
+  return thisClass
+}
+
+let aPoint = newObject(NSPoint(3,y: 4))
+📓(aPoint)
+📓(aPoint→"x")
+📓(aPoint→"distanceFromOrigin")
