@@ -298,3 +298,149 @@ func NS3DPoint(x:Int, y:Int, z:Int) -> Class {
 
 let anotherPoint = newObject(NS3DPoint(10, y: 12, z: 14))
 📓(anotherPoint→"distanceFromOrigin")
+
+func NoArgsBlock(code:()->Object?, proto:Object)->Object {
+  var _self:Object! = nil
+  _self = { aSelector in
+    switch aSelector {
+    case "value":
+      return .method({_ in return code()})
+    default:
+      return proto(aSelector)
+    }
+  }
+  return _self
+}
+
+let emptyBlock = NoArgsBlock({ return nil }, proto: o)
+
+func OneArgBlock(code:(Object)->Object?, proto:Object)->Object {
+  var _self:Object! = nil
+  _self = { aSelector in
+    switch aSelector {
+    case "value:":
+      return .method({(this, _cmd, args:Object...) in
+        let arg = args[0]
+        return code(arg)
+      })
+    default:
+      return proto(aSelector)
+    }
+  }
+  return _self
+}
+
+func NSArray(objects:[Object]) -> Class {
+  let superclass = NSObject
+  let thisClass:Class = { aSelector in
+    switch aSelector {
+    case "count":
+      return .method({_ in return Integer(objects.count,proto: o)})
+    case "filter:":
+      return .method({(this, _cmd, args:Object...) in
+        let block = args[0]
+        var filtered:[Object] = []
+        for object in objects {
+          let result = (block, "value:") ✍ object
+          (result, "ifTrue:") ✍ NoArgsBlock({ filtered.append(object); return object; }, proto: o)
+        }
+        return NSArray(filtered)
+      })
+    case "objectAtIndex:":
+      return .method({(this, _cmd, args:Object...) in
+        let index = ℹ︎(args[0])!
+        return objects[index]
+      })
+    case "superclass":
+      return .method({ _ in return superclass })
+    default:
+      return superclass(aSelector)
+    }
+  }
+  return thisClass
+}
+
+func NSArray(objects:Object...) -> Class {
+  return NSArray(objects)
+}
+
+let NSBoolean : Class = { aSelector in
+  let superclass = NSObject
+  switch aSelector {
+  case "ifFalse:":
+    return .method({(this, _cmd, args:Object...) in
+      let falseBlock = args[0]
+      let maybeBoolIMP = this.."ifTrue:ifFalse:"
+      guard let boolIMP = maybeBoolIMP else { return nil }
+      switch boolIMP {
+      case .method(let f):
+        return f(this, "ifTrue:ifFalse:", emptyBlock, falseBlock)
+      default:
+        return nil
+      }
+    })
+  case "ifTrue:":
+    return .method({(this, _cmd, args:Object...) in
+      let trueBlock = args[0]
+      let maybeBoolIMP = this.."ifTrue:ifFalse:"
+      guard let boolIMP = maybeBoolIMP else { return nil }
+      switch boolIMP {
+      case .method(let f):
+        return f(this, "ifTrue:ifFalse:", trueBlock, emptyBlock)
+      default:
+        return nil
+      }
+    })
+  case "superclass":
+    return .method({_ in return superclass })
+  default:
+    return superclass(aSelector)
+  }
+}
+
+let NSBooleanFalse : Class = { aSelector in
+  let superclass = NSBoolean
+  switch aSelector {
+  case "description":
+    return .description({_ in return "False"})
+  case "ifTrue:ifFalse:":
+    return .method({(this, _cmd, args:Object...) in
+      let falseBlock = args[1]
+      return falseBlock→"value"
+    })
+  case "superclass":
+    return .method({_ in return superclass})
+  default:
+    return superclass(aSelector)
+  }
+}
+
+let False = newObject(NSBooleanFalse)
+
+let NSBooleanTrue : Class = { aSelector in
+  let superclass = NSBoolean
+  switch aSelector {
+  case "description":
+    return .description({_ in return "True"})
+  case "ifTrue:ifFalse:":
+    return .method({(this, _cmd, args:Object...) in
+      let trueBlock = args[0]
+      return trueBlock→"value"
+    })
+  case "superclass":
+    return .method({_ in return superclass})
+  default:
+    return superclass(aSelector)
+  }
+}
+
+let True = newObject(NSBooleanTrue)
+
+let myArray = newObject(NSArray(Integer(1, proto: o), Integer(2, proto: o),
+  Integer(3, proto: o), Integer(4, proto: o)))
+let evens = (myArray,"filter:") ✍ OneArgBlock({ obj in
+  return (ℹ︎(obj)! % 2) == 0 ? True : False
+  }, proto: o)
+ℹ︎(evens→"count")
+📓((evens,"objectAtIndex:") ✍ Integer(0, proto: o))
+📓((evens,"objectAtIndex:") ✍ Integer(1, proto: o))
