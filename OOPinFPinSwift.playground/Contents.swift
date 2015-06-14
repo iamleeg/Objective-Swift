@@ -23,6 +23,7 @@ func DoesNothing()->Object {
 let o : Object = DoesNothing()
 
 infix operator .. {}
+infix operator .... {}
 
 func .. (receiver: Object?, _cmd:Selector) -> IMP? {
   if let this = receiver {
@@ -39,7 +40,19 @@ func .. (receiver: Object?, _cmd:Selector) -> IMP? {
   }
 }
 
+func .... (receiver: Object?, _cmd:Selector) -> IMP? {
+  guard let this = receiver else { return nil }
+  let method = (this→"superclass")!(_cmd)
+  switch(method) {
+  case IMP.methodMissing(let f):
+    return f(this, _cmd)...._cmd
+  default:
+    return method
+  }
+}
+
 infix operator → {}
+infix operator →→ {}
 
 func → (receiver: Object?, _cmd:Selector) -> Object? {
   if let imp = receiver.._cmd {
@@ -50,6 +63,16 @@ func → (receiver: Object?, _cmd:Selector) -> Object? {
       return nil
     }
   } else {
+    return nil
+  }
+}
+
+func →→ (receiver: Object?, _cmd:Selector) -> Object? {
+  guard let imp = receiver...._cmd else { return nil }
+  switch imp {
+  case .method(let f):
+    return f(receiver!, _cmd)
+  default:
     return nil
   }
 }
@@ -180,6 +203,8 @@ let NSObject : Class = { aSelector in
     return IMP.description({ _ in return "An NSObject" })
   case "instanceVariables":
     return IMP.method({ _ in return o })
+  case "superclass":
+    return .method({ _ in return nil })
   default:
     return IMP.methodMissing({ _ in
       print("Instance does not recognize selector \(aSelector)")
@@ -227,6 +252,8 @@ func NSPoint(x:Int, y:Int) -> Class {
         let distance = sqrt(Double(thisX*thisX + thisY*thisY))
         return Integer(Int(distance), proto: o)
       })
+    case "superclass":
+      return .method({ _ in return superclass })
     default:
       return superclass(aSelector)
     }
@@ -238,3 +265,36 @@ let aPoint = newObject(NSPoint(3,y: 4))
 📓(aPoint)
 📓(aPoint→"x")
 📓(aPoint→"distanceFromOrigin")
+
+func NS3DPoint(x:Int, y:Int, z:Int) -> Class {
+  let superclass = NSPoint(x, y: y)
+  let ivars:Object = { variableName in
+    switch variableName {
+    case "z":
+      return .method({_ in return Integer(z, proto: o)})
+    default:
+      return (superclass→"instanceVariables")!(variableName)
+    }
+  }
+  let thisClass:Class = { aSelector in
+    switch aSelector {
+    case "instanceVariables":
+      return .method({_ in return ivars})
+    case "distanceFromOrigin":
+      return .method({(this, _cmd, args:Object...) in
+        let twoDDistance = ℹ︎(this→→"distanceFromOrigin")!
+        let thisZ = ℹ︎(this→"z")!
+        let distance = sqrt(Double(twoDDistance*twoDDistance + thisZ*thisZ))
+        return Integer(Int(distance), proto: o)
+      })
+    case "superclass":
+      return .method({ _ in return superclass })
+    default:
+      return superclass(aSelector)
+    }
+  }
+  return thisClass
+}
+
+let anotherPoint = newObject(NS3DPoint(10, y: 12, z: 14))
+📓(anotherPoint→"distanceFromOrigin")
